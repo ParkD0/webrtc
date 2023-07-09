@@ -17,6 +17,8 @@
   "dependencies": {
     "@socket.io/admin-ui": "^0.5.1",
     "express": "^4.18.2",
+    "localtunnel": "^2.0.2",
+    "mkcert": "^1.5.1",
     "pug": "^3.0.2",
     "socket.io": "^4.7.1",
     "ws": "^8.13.0"

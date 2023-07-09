@@ -1,9 +1,17 @@
 import http from "http";
-//import WebSocket from "ws";
-import {Server} from "socket.io"
-import { instrument } from "@socket.io/admin-ui";
+import WebSocket from "ws";
+import SocketIO from "socket.io"
+//import {Server} from "socket.io"
+//import { instrument } from "@socket.io/admin-ui";
 
 import express from "express";
+
+const fs = require("fs");
+const https = require("https");
+const options = {
+    key: fs.readFileSync("./cert.key"),
+    cert: fs.readFileSync("./cert.crt"),
+}
 
 const app = express();
 
@@ -17,62 +25,25 @@ app.get("/*", (req, res)=> res.redirect("/"));
 const handleListen = () => console.log('Listening on http://localhost:3000');
 
 const httpServer = http.createServer(app);
-const wsServer = new Server(httpServer, {
-    cors: {
-        origin: ["https:/admin.socket.io"],
-        credentials: true,
-    }
-});
-instrument(wsServer, {
-    auth: false,
-})
-
-function publicRooms() {
-    const {
-        sockets: {
-            adapter: {sids, rooms},
-        },
-    } = wsServer;
-
-    const publicRooms = [];
-    rooms.forEach((_, key) => {
-        if(sids.get(key) ===  undefined) {
-            publicRooms.push(key);
-        }
-    });
-    return publicRooms;
-}
-
-function countRoom(roomName) {
-    return wsServer.sockets.adapter.rooms.get(roomName)?.size;
-}
+const httpsServer = https.createServer(options, app);
+//const wsServer = SocketIO(httpServer);
+const wsServer = SocketIO(httpsServer);
 
 wsServer.on("connection", socket => {
-    socket["nickname"] = "Annonymous";
-    socket.onAny((event)=>{
-        //console.log(wsServer.sockets.adapter);
-        console.log(`Socket Event: ${event}`);
-    })
-
-    socket.on("enter_room", (roomName, done) => {
+    socket.on("join_room", (roomName) => {
         socket.join(roomName);
-        done();
-        socket.to(roomName).emit("welcome", socket.nickname, countRoom(roomName));
-        wsServer.sockets.emit("room_change", publicRooms());
-    })
-    socket.on("disconnecting", ()=> {
-        socket.rooms.forEach(room=> socket.to(room).emit("bye", socket.nickname, countRoom(room)-1));
-    })
-    socket.on("disconnect", ()=> {
-        wsServer.sockets.emit("room_change", publicRooms());
-    })
-    socket.on("new_message", (msg, roomName, done)=>{
-        socket.to(roomName).emit("new_message", `${socket.nickname}: ${msg}`);
-        done();
-    })
-    socket.on("nickname", (nickname)=>{
-        socket["nickname"] = nickname;
-    })
+        socket.to(roomName).emit("welcome"); //socket.to 함수 room에서 나를 제외한 모든 클라이언트에게 발송
+    });
+    socket.on("offer", (offer, roomName) => {
+        socket.to(roomName).emit("offer", offer);
+    });
+    socket.on("answer", (answer, roomName)=> {
+        socket.to(roomName).emit("answer", answer);
+    });
+    socket.on("ice", (ice, roomName) => {
+        socket.to(roomName).emit("ice", ice);
+    });
 })
 
 httpServer.listen(3000, handleListen);
+httpsServer.listen(3001);
